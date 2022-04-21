@@ -13,10 +13,4 @@
         android:text="开始"
         android:onClick="begin"/>
 
-    <Button
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="开始2"
-        android:onClick="begin2"/>
-
 </LinearLayout>

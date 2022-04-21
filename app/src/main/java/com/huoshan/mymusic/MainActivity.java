@@ -34,10 +34,4 @@ public class MainActivity extends AppCompatActivity {
         wlPlayer.setSource("http://mpge.5nd.com/2015/2015-11-26/69708/1.mp3");
         wlPlayer.parpared();
     }
-
-    public void begin2(View view) {
-
-        wlPlayer.setSource("http://mpge.5nd.com/2015/2015-11-26/69708/1.mp3");
-        wlPlayer.parpared();
-    }
 }
