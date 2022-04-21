@@ -1,11 +1,7 @@
 #include <jni.h>
 #include <string>
-#include <android/log.h>
-#include "pthread.h"
-#include "WlCallJava.h"
 #include "WlFFmpeg.h"
-
-pthread_t thread;
+#include "WlPlaystatus.h"
 
 extern "C"
 {
@@ -16,6 +12,7 @@ extern "C"
 _JavaVM *javaVM = NULL;
 WlCallJava *callJava = NULL;
 WlFFmpeg *fFmpeg = NULL;
+WlPlaystatus *playstatus = NULL;
 
 
 extern "C"
@@ -43,12 +40,12 @@ Java_com_huoshan_myplayer_player_WlPlayer_n_1parpared(JNIEnv *env, jobject insta
         {
             callJava = new WlCallJava(javaVM, env, &instance);
         }
-        fFmpeg = new WlFFmpeg(callJava, source);
+        playstatus = new WlPlaystatus();
+        fFmpeg = new WlFFmpeg(playstatus, callJava, source);
         fFmpeg->parpared();
     }
-}
 
-extern "C"
+}extern "C"
 JNIEXPORT void JNICALL
 Java_com_huoshan_myplayer_player_WlPlayer_n_1start(JNIEnv *env, jobject thiz) {
     if (fFmpeg != NULL) {

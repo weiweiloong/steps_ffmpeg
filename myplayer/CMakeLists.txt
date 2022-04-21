@@ -61,7 +61,9 @@ add_library( # Sets the name of the library.
         src/main/cpp/native-lib.cpp
         src/main/cpp/WlAudio.cpp
         src/main/cpp/WlCallJava.cpp
-        src/main/cpp/WlFFmpeg.cpp)
+        src/main/cpp/WlFFmpeg.cpp
+	src/main/cpp/WlQueue.cpp
+	src/main/cpp/WlPlaystatus.cpp)
 
 find_library( # Sets the name of the path variable.
         log-lib
