@@ -7,6 +7,7 @@
 
 #include "jni.h"
 #include <linux/stddef.h>
+#include <stdint.h>
 #include "AndroidLog.h"
 
 #define MAIN_THREAD 0
@@ -25,6 +26,7 @@ public:
     jmethodID jmid_timeinfo;
     jmethodID jmid_error;
     jmethodID jmid_complete;
+    jmethodID jmid_renderyuv;
 
 public:
     WlCallJava(_JavaVM *javaVM, JNIEnv *env, jobject *obj);
@@ -36,6 +38,7 @@ public:
     void onCallTimeInfo(int type, int curr, int total);
     void onCallError(int type, int code, char *msg);
     void onCallComplete(int type);
+    void onCallRenderYUV(int width, int height, uint8_t *fy, uint8_t *fu, uint8_t *fv);
 };
 
 

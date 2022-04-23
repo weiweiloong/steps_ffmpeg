@@ -62,23 +62,29 @@ Java_com_huoshan_myplayer_player_WlPlayer_n_1start(JNIEnv *env, jobject instance
     {
         pthread_create(&thread_start, NULL, startCallBack, fFmpeg);
     }
-}extern "C"
+}
+
+extern "C"
 JNIEXPORT void JNICALL
 Java_com_huoshan_myplayer_player_WlPlayer_n_1pause(JNIEnv *env, jobject instance) {
     if(fFmpeg != NULL)
     {
         fFmpeg->pause();
     }
-}extern "C"
+}
+
+extern "C"
 JNIEXPORT void JNICALL
 Java_com_huoshan_myplayer_player_WlPlayer_n_1resume(JNIEnv *env, jobject instance) {
     if(fFmpeg != NULL)
     {
         fFmpeg->resume();
     }
-}extern "C"
+}
+
+extern "C"
 JNIEXPORT void JNICALL
-Java_com_ywl5320_myplayer_player_WlPlayer_n_1stop(JNIEnv *env, jobject instance) {
+Java_com_huoshan_myplayer_player_WlPlayer_n_1stop(JNIEnv *env, jobject instance) {
     if(!nexit)
     {
         return;
@@ -104,47 +110,14 @@ Java_com_ywl5320_myplayer_player_WlPlayer_n_1stop(JNIEnv *env, jobject instance)
     }
     nexit = true;
     env->CallVoidMethod(instance, jmid_next);
-}extern "C"
+}
+
+extern "C"
 JNIEXPORT void JNICALL
 Java_com_huoshan_myplayer_player_WlPlayer_n_1seek(JNIEnv *env, jobject instance, jint secds) {
     if(fFmpeg != NULL)
     {
         fFmpeg->seek(secds);
     }
-}extern "C"
-JNIEXPORT jint JNICALL
-Java_com_huoshan_myplayer_player_WlPlayer_n_1duration(JNIEnv *env, jobject instance) {
-    if(fFmpeg != NULL)
-    {
-        return fFmpeg->duration;
-    }
-    return 0;
-}extern "C"
-JNIEXPORT void JNICALL
-Java_com_huoshan_myplayer_player_WlPlayer_n_1volume(JNIEnv *env, jobject instance, jint percent) {
-    if(fFmpeg != NULL)
-    {
-        fFmpeg->setVolume(percent);
-    }
-}extern "C"
-JNIEXPORT void JNICALL
-Java_com_huoshan_myplayer_player_WlPlayer_n_1mute(JNIEnv *env, jobject instance, jint mute) {
-    if(fFmpeg != NULL)
-    {
-        fFmpeg->setMute(mute);
-    }
-}extern "C"
-JNIEXPORT void JNICALL
-Java_com_huoshan_myplayer_player_WlPlayer_n_1pitch(JNIEnv *env, jobject instance, jfloat pitch) {
-    if(fFmpeg != NULL)
-    {
-        fFmpeg->setPitch(pitch);
-    }
-}extern "C"
-JNIEXPORT void JNICALL
-Java_com_huoshan_myplayer_player_WlPlayer_n_1speed(JNIEnv *env, jobject instance, jfloat speed) {
-    if(fFmpeg != NULL)
-    {
-        fFmpeg->setSpeed(speed);
-    }
+
 }

@@ -10,6 +10,7 @@ using namespace soundtouch;
 
 extern "C"
 {
+#include <libavutil/time.h>
 #include "libavcodec/avcodec.h"
 #include <libswresample/swresample.h>
 #include <SLES/OpenSLES.h>
@@ -40,11 +41,7 @@ public:
     double now_time;//当前frame时间
     double last_tiem; //上一次调用时间
 
-    int volumePercent = 100;
-    int mute = 2;
 
-    float pitch = 1.0f;
-    float speed = 1.0f;
 
     // 引擎接口
     SLObjectItf engineObject = NULL;
@@ -58,26 +55,18 @@ public:
     //pcm
     SLObjectItf pcmPlayerObject = NULL;
     SLPlayItf pcmPlayerPlay = NULL;
-    SLVolumeItf pcmVolumePlay = NULL;
-    SLMuteSoloItf  pcmMutePlay = NULL;
 
     //缓冲器队列接口
     SLAndroidSimpleBufferQueueItf pcmBufferQueue = NULL;
 
     //SoundTouch
-    SoundTouch *soundTouch = NULL;
-    SAMPLETYPE *sampleBuffer = NULL;
-    bool finished = true;
-    uint8_t *out_buffer = NULL;
-    int nb = 0;
-    int num = 0;
 
 public:
     WlAudio(WlPlaystatus *playstatus, int sample_rate, WlCallJava *callJava);
     ~WlAudio();
 
     void play();
-    int resampleAudio(void **pcmbuf);
+    int resampleAudio();
 
     void initOpenSLES();
 
@@ -91,15 +80,10 @@ public:
 
     void release();
 
-    void setVolume(int percent);
 
-    void setMute(int mute);
 
-    int getSoundTouchData();
 
-    void setPitch(float pitch);
 
-    void setSpeed(float speed);
 };
 
 

@@ -9,6 +9,7 @@
 #include "pthread.h"
 #include "WlAudio.h"
 #include "WlPlaystatus.h"
+#include "WlVideo.h"
 
 extern "C"
 {
@@ -25,6 +26,7 @@ public:
     pthread_t decodeThread;
     AVFormatContext *pFormatCtx = NULL;
     WlAudio *audio = NULL;
+    WlVideo *video = NULL;
     WlPlaystatus *playstatus = NULL;
     pthread_mutex_t init_mutex;
     bool exit = false;
@@ -46,7 +48,8 @@ public:
 
     void seek(int64_t secds);
 
-    void setVolume(int percent);
+    int getCodecContext(AVCodecParameters *codecpar, AVCodecContext **avCodecContext);
+	void setVolume(int percent);
 
     void setMute(int mute);
 

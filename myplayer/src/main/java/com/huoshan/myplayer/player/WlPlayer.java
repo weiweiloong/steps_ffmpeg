@@ -11,6 +11,7 @@ import com.huoshan.myplayer.listener.WlOnPauseResumeListener;
 import com.huoshan.myplayer.listener.WlOnTimeInfoListener;
 import com.huoshan.myplayer.log.MyLog;
 import com.huoshan.myplayer.muteenum.MuteEnum;
+import com.huoshan.myplayer.opengl.WlGLSurfaceView;
 
 public class WlPlayer {
 
@@ -29,17 +30,13 @@ public class WlPlayer {
     private static String source;//数据源
     private static WlTimeInfoBean wlTimeInfoBean;
     private static boolean playNext = false;
-    private static int duration = -1;
-    private static int volumePercent = 100;
-    private static float speed = 1.0f;
-    private static float pitch = 1.0f;
-    private static MuteEnum muteEnum = MuteEnum.MUTE_CENTER;
     private WlOnParparedListener wlOnParparedListener;
     private WlOnLoadListener wlOnLoadListener;
     private WlOnPauseResumeListener wlOnPauseResumeListener;
     private WlOnTimeInfoListener wlOnTimeInfoListener;
     private WlOnErrorListener wlOnErrorListener;
     private WlOnCompleteListener wlOnCompleteListener;
+    private WlGLSurfaceView wlGLSurfaceView;
 
 
     public WlPlayer()
@@ -52,6 +49,9 @@ public class WlPlayer {
     public void setSource(String source)
     {
         this.source = source;
+    }
+    public void setWlGLSurfaceView(WlGLSurfaceView wlGLSurfaceView) {
+        this.wlGLSurfaceView = wlGLSurfaceView;
     }
 
     /**
@@ -109,10 +109,6 @@ public class WlPlayer {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                setVolume(volumePercent);
-                setMute(muteEnum);
-                setPitch(pitch);
-                setSpeed(speed);
                 n_start();
             }
         }).start();
@@ -139,7 +135,6 @@ public class WlPlayer {
     public void stop()
     {
         wlTimeInfoBean = null;
-        duration = -1;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -159,48 +154,6 @@ public class WlPlayer {
         playNext = true;
         stop();
     }
-
-    public int getDuration()
-    {
-        if(duration < 0)
-        {
-            duration = n_duration();
-        }
-        return duration;
-    }
-
-    public void setVolume(int percent)
-    {
-        if(percent >=0 && percent <= 100)
-        {
-            volumePercent = percent;
-            n_volume(percent);
-        }
-    }
-
-    public int getVolumePercent()
-    {
-        return volumePercent;
-    }
-
-    public void setMute(MuteEnum mute)
-    {
-        muteEnum = mute;
-        n_mute(mute.getValue());
-    }
-
-    public void setPitch(float p)
-    {
-        pitch = p;
-        n_pitch(pitch);
-    }
-
-    public void setSpeed(float s)
-    {
-        speed = s;
-        n_speed(speed);
-    }
-
 
     /**
      * c++回调java的方法
@@ -262,15 +215,23 @@ public class WlPlayer {
         }
     }
 
+    public void onCallRenderYUV(int width, int height, byte[] y, byte[] u, byte[] v)
+    {
+        MyLog.d("获取到视频的yuv数据");
+        if(wlGLSurfaceView != null)
+        {
+            wlGLSurfaceView.setYUVData(width, height, y, u, v);
+        }
+    }
     private native void n_parpared(String source);
     private native void n_start();
     private native void n_pause();
     private native void n_resume();
     private native void n_stop();
     private native void n_seek(int secds);
-    private native int n_duration();
-    private native void n_volume(int percent);
-    private native void n_mute(int mute);
-    private native void n_pitch(float pitch);
-    private native void n_speed(float speed);
+
+
+
+
+
 }

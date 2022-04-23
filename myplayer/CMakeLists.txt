@@ -66,6 +66,7 @@ add_library( # Sets the name of the library.
         src/main/cpp/WlFFmpeg.cpp
 	    src/main/cpp/WlQueue.cpp
 	    src/main/cpp/WlPlaystatus.cpp
+		src/main/cpp/WlVideo.cpp
 
 		src/main/cpp/soundtouch/SoundTouch/AAFilter.cpp
 		src/main/cpp/soundtouch/SoundTouch/FIFOSampleBuffer.cpp

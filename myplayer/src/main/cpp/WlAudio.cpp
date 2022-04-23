@@ -11,12 +11,6 @@ WlAudio::WlAudio(WlPlaystatus *playstatus, int sample_rate, WlCallJava *callJava
     queue = new WlQueue(playstatus);
     buffer = (uint8_t *) av_malloc(sample_rate * 2 * 2);
 
-    sampleBuffer = static_cast<SAMPLETYPE *>(malloc(sample_rate * 2 * 2));
-    soundTouch = new SoundTouch();
-    soundTouch->setSampleRate(sample_rate);
-    soundTouch->setChannels(2);
-    soundTouch->setPitch(pitch);
-    soundTouch->setTempo(speed);
 }
 
 WlAudio::~WlAudio() {
@@ -38,12 +32,13 @@ void WlAudio::play() {
 
 }
 
-int WlAudio::resampleAudio(void **pcmbuf) {
+int WlAudio::resampleAudio() {
     data_size = 0;
     while(playstatus != NULL && !playstatus->exit)
     {
         if(playstatus->seek)
         {
+            av_usleep(1000 * 100);
             continue;
         }
 
@@ -54,6 +49,7 @@ int WlAudio::resampleAudio(void **pcmbuf) {
                 playstatus->load = true;
                 callJava->onCallLoad(CHILD_THREAD, true);
             }
+            av_usleep(1000 * 100);
             continue;
         } else{
             if(playstatus->load)
@@ -116,7 +112,7 @@ int WlAudio::resampleAudio(void **pcmbuf) {
                 continue;
             }
 
-            nb = swr_convert(
+            int nb = swr_convert(
                     swr_ctx,
                     &buffer,
                     avFrame->nb_samples,
@@ -132,7 +128,7 @@ int WlAudio::resampleAudio(void **pcmbuf) {
                 now_time = clock;
             }
             clock = now_time;
-            *pcmbuf = buffer;
+
             av_packet_free(&avPacket);
             av_free(avPacket);
             avPacket = NULL;
@@ -155,53 +151,14 @@ int WlAudio::resampleAudio(void **pcmbuf) {
 }
 
 
-int WlAudio::getSoundTouchData() {
 
-    while(playstatus != NULL && !playstatus->exit)
-    {
-        out_buffer = NULL;
-        if(finished)
-        {
-            finished = false;
-            data_size = resampleAudio(reinterpret_cast<void **>(&out_buffer));
-            if(data_size > 0)
-            {
-                for(int i = 0; i < data_size / 2 + 1; i++)
-                {
-                    sampleBuffer[i] = (out_buffer[i * 2] | ((out_buffer[i * 2 + 1]) << 8));
-                }
-                soundTouch->putSamples(sampleBuffer, nb);
-                num = soundTouch->receiveSamples(sampleBuffer, data_size / 4);
-            } else{
-                soundTouch->flush();
-            }
-        }
-        if(num == 0)
-        {
-            finished = true;
-            continue;
-        } else{
-            if(out_buffer == NULL)
-            {
-                num = soundTouch->receiveSamples(sampleBuffer, data_size / 4);
-                if(num == 0)
-                {
-                    finished = true;
-                    continue;
-                }
-            }
-            return num;
-        }
-    }
-    return 0;
-}
 
 void pcmBufferCallBack(SLAndroidSimpleBufferQueueItf bf, void * context)
 {
     WlAudio *wlAudio = (WlAudio *) context;
     if(wlAudio != NULL)
     {
-        int buffersize = wlAudio->getSoundTouchData();
+        int buffersize = wlAudio->resampleAudio();
         if(buffersize > 0)
         {
             wlAudio->clock += buffersize / ((double)(wlAudio->sample_rate * 2 * 2));
@@ -211,7 +168,7 @@ void pcmBufferCallBack(SLAndroidSimpleBufferQueueItf bf, void * context)
                 //回调应用层
                 wlAudio->callJava->onCallTimeInfo(CHILD_THREAD, wlAudio->clock, wlAudio->duration);
             }
-            (* wlAudio-> pcmBufferQueue)->Enqueue( wlAudio->pcmBufferQueue, (char *) wlAudio->sampleBuffer, buffersize * 2 * 2);
+            (* wlAudio-> pcmBufferQueue)->Enqueue( wlAudio->pcmBufferQueue, (char *) wlAudio-> buffer, buffersize);
         }
     }
 }
@@ -255,24 +212,20 @@ void WlAudio::initOpenSLES() {
     SLDataSource slDataSource = {&android_queue, &pcm};
 
 
-    const SLInterfaceID ids[3] = {SL_IID_BUFFERQUEUE, SL_IID_VOLUME, SL_IID_MUTESOLO};
-    const SLboolean req[3] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
+    const SLInterfaceID ids[2] = {SL_IID_BUFFERQUEUE, SL_IID_PLAYBACKRATE};
+    const SLboolean req[2] = {SL_BOOLEAN_TRUE, SL_BOOLEAN_TRUE};
 
-    (*engineEngine)->CreateAudioPlayer(engineEngine, &pcmPlayerObject, &slDataSource, &audioSnk, 3, ids, req);
+    (*engineEngine)->CreateAudioPlayer(engineEngine, &pcmPlayerObject, &slDataSource, &audioSnk, 2, ids, req);
     //初始化播放器
     (*pcmPlayerObject)->Realize(pcmPlayerObject, SL_BOOLEAN_FALSE);
 
 //    得到接口后调用  获取Player接口
     (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_PLAY, &pcmPlayerPlay);
 //   获取声音接口
-    (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_VOLUME, &pcmVolumePlay);
     //获取声道接口
-    (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_MUTESOLO, &pcmMutePlay);
 
 //    注册回调缓冲区 获取缓冲队列接口
     (*pcmPlayerObject)->GetInterface(pcmPlayerObject, SL_IID_BUFFERQUEUE, &pcmBufferQueue);
-    setVolume(volumePercent);
-    setMute(mute);
     //缓冲接口回调
     (*pcmBufferQueue)->RegisterCallback(pcmBufferQueue, pcmBufferCallBack, this);
 //    获取播放状态接口
@@ -406,85 +359,9 @@ void WlAudio::stop() {
     }
 }
 
-void WlAudio::setVolume(int percent) {
-    volumePercent = percent;
-    if(pcmVolumePlay != NULL)
-    {
-        if(percent > 30)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -20);
-        }
-        else if(percent > 25)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -22);
-        }
-        else if(percent > 20)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -25);
-        }
-        else if(percent > 15)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -28);
-        }
-        else if(percent > 10)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -30);
-        }
-        else if(percent > 5)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -34);
-        }
-        else if(percent > 3)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -37);
-        }
-        else if(percent > 0)
-        {
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -40);
-        }
-        else{
-            (*pcmVolumePlay)->SetVolumeLevel(pcmVolumePlay, (100 - percent) * -100);
-        }
-    }
-}
-
-void WlAudio::setMute(int mute) {
-    this->mute = mute;
-    if(pcmMutePlay != NULL)
-    {
-        if(mute == 0)//right
-        {
-            (*pcmMutePlay)->SetChannelMute(pcmMutePlay, 1, false);
-            (*pcmMutePlay)->SetChannelMute(pcmMutePlay, 0, true);
-        }
-        else if(mute == 1)//left
-        {
-            (*pcmMutePlay)->SetChannelMute(pcmMutePlay, 1, true);
-            (*pcmMutePlay)->SetChannelMute(pcmMutePlay, 0, false);
-        }
-        else if(mute == 2)//center
-        {
-            (*pcmMutePlay)->SetChannelMute(pcmMutePlay, 1, false);
-            (*pcmMutePlay)->SetChannelMute(pcmMutePlay, 0, false);
-        }
 
 
-    }
 
-}
 
-void WlAudio::setPitch(float pitch) {
-    this->pitch = pitch;
-    if(soundTouch != NULL)
-    {
-        soundTouch->setPitch(pitch);
-    }
-}
 
-void WlAudio::setSpeed(float speed) {
-    this->speed = speed;
-    if(soundTouch != NULL)
-    {
-        soundTouch->setTempo(speed);
-    }
-}
+

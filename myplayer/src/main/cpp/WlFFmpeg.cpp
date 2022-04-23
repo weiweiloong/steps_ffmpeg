@@ -52,7 +52,7 @@ void WlFFmpeg::decodeFFmpegThread() {
     {
         if(LOG_DEBUG)
         {
-            LOGE("can not open url :%s", url);
+            LOGE("----can not open url :%s----", url);
         }
         callJava->onCallError(CHILD_THREAD, 1001, "can not open url");
         exit = true;
@@ -84,57 +84,29 @@ void WlFFmpeg::decodeFFmpegThread() {
                 duration = audio->duration;
             }
         }
+        else if(pFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO)
+
+    {
+            if(video == NULL)
+        {
+                video = new WlVideo(playstatus, callJava);
+                video->streamIndex = i;
+                video->codecpar = pFormatCtx->streams[i]->codecpar;
+                video->time_base = pFormatCtx->streams[i]->time_base;
+        }
     }
 
-    AVCodec *dec = avcodec_find_decoder(audio->codecpar->codec_id);
-    if(!dec)
-    {
-        if(LOG_DEBUG)
-        {
-            LOGE("can not find decoder");
-        }
-        callJava->onCallError(CHILD_THREAD, 1003, "can not find decoder");
-        exit = true;
-        pthread_mutex_unlock(&init_mutex);
-        return;
     }
 
-    audio->avCodecContext = avcodec_alloc_context3(dec);
-    if(!audio->avCodecContext)
+    if(audio != NULL)
     {
-        if(LOG_DEBUG)
-        {
-            LOGE("can not alloc new decodecctx");
-        }
-        callJava->onCallError(CHILD_THREAD, 1004, "can not alloc new decodecctx");
-        exit = true;
-        pthread_mutex_unlock(&init_mutex);
-        return;
+        getCodecContext(audio->codecpar, &audio->avCodecContext);
     }
+    if(video != NULL)
+    {
+        getCodecContext(video->codecpar, &video->avCodecContext);
+        }
 
-    if(avcodec_parameters_to_context(audio->avCodecContext, audio->codecpar) < 0)
-    {
-        if(LOG_DEBUG)
-        {
-            LOGE("can not fill decodecctx");
-        }
-        callJava->onCallError(CHILD_THREAD, 1005, "ccan not fill decodecctx");
-        exit = true;
-        pthread_mutex_unlock(&init_mutex);
-        return;
-    }
-
-    if(avcodec_open2(audio->avCodecContext, dec, 0) != 0)
-    {
-        if(LOG_DEBUG)
-        {
-            LOGE("cant not open audio strames");
-        }
-        callJava->onCallError(CHILD_THREAD, 1006, "cant not open audio strames");
-        exit = true;
-        pthread_mutex_unlock(&init_mutex);
-        return;
-    }
     if(callJava != NULL)
     {
         if(playstatus != NULL && !playstatus->exit)
@@ -154,24 +126,31 @@ void WlFFmpeg::start() {
         return;
     }
     audio->play();
+    video->play();
     while(playstatus != NULL && !playstatus->exit)
     {
         if(playstatus->seek)
         {
+            av_usleep(1000 * 100);
             continue;
         }
 
-        if(audio->queue->getQueueSize() > 40)
-        {
-            continue;
-        }
+//        if(audio->queue->getQueueSize() > 40)
+//        {
+//            continue;
+//        }
         AVPacket *avPacket = av_packet_alloc();
         if(av_read_frame(pFormatCtx, avPacket) == 0)
         {
             if(avPacket->stream_index == audio->streamIndex)
             {
                 audio->queue->putAvpacket(avPacket);
-            } else{
+            }
+            else if(avPacket->stream_index == video->streamIndex)
+            {
+                video->queue->putAvpacket(avPacket);
+            }
+            else{
                 av_packet_free(&avPacket);
                 av_free(avPacket);
             }
@@ -182,6 +161,7 @@ void WlFFmpeg::start() {
             {
                 if(audio->queue->getQueueSize() > 0)
                 {
+                    av_usleep(1000 * 100);
                     continue;
                 } else{
                     playstatus->exit = true;
@@ -247,6 +227,16 @@ void WlFFmpeg::release() {
         delete(audio);
         audio = NULL;
     }
+    if(LOG_DEBUG)
+    {
+        LOGE("释放 video");
+    }
+    if(video != NULL)
+    {
+        video->release();
+        delete(video);
+        video = NULL;
+    }
 
     if(LOG_DEBUG)
     {
@@ -305,34 +295,55 @@ void WlFFmpeg::seek(int64_t secds) {
     }
 }
 
-void WlFFmpeg::setVolume(int percent) {
-    if(audio != NULL)
+int WlFFmpeg::getCodecContext(AVCodecParameters *codecpar, AVCodecContext **avCodecContext) {
+    AVCodec *dec = avcodec_find_decoder(codecpar->codec_id);
+    if(!dec)
     {
-        audio->setVolume(percent);
+        if(LOG_DEBUG)
+        {
+            LOGE("can not find decoder");
     }
+        callJava->onCallError(CHILD_THREAD, 1003, "can not find decoder");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
+        return -1;
 }
 
-void WlFFmpeg::setMute(int mute) {
-    if(audio != NULL)
+    *avCodecContext = avcodec_alloc_context3(dec);
+    if(!audio->avCodecContext)
     {
-        audio->setMute(mute);
+        if(LOG_DEBUG)
+        {
+            LOGE("can not alloc new decodecctx");
     }
+        callJava->onCallError(CHILD_THREAD, 1004, "can not alloc new decodecctx");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
+        return -1;
 }
 
-void WlFFmpeg::setPitch(float pitch) {
-
-    if(audio != NULL)
+    if(avcodec_parameters_to_context(*avCodecContext, codecpar) < 0)
     {
-        audio->setPitch(pitch);
+        if(LOG_DEBUG)
+    {
+            LOGE("can not fill decodecctx");
     }
-
+        callJava->onCallError(CHILD_THREAD, 1005, "ccan not fill decodecctx");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
+        return -1;
 }
 
-void WlFFmpeg::setSpeed(float speed) {
-
-    if(audio != NULL)
+    if(avcodec_open2(*avCodecContext, dec, 0) != 0)
     {
-        audio->setSpeed(speed);
+        if(LOG_DEBUG)
+    {
+            LOGE("cant not open audio strames");
     }
-
+        callJava->onCallError(CHILD_THREAD, 1006, "cant not open audio strames");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
+        return -1;
+    }
+    return 0;
 }
