@@ -13,6 +13,7 @@
 extern "C"
 {
 #include "libavformat/avformat.h"
+#include <libavutil/time.h>
 };
 
 
@@ -25,9 +26,10 @@ public:
     AVFormatContext *pFormatCtx = NULL;
     WlAudio *audio = NULL;
     WlPlaystatus *playstatus = NULL;
-
-
-
+    pthread_mutex_t init_mutex;
+    bool exit = false;
+    int duration = 0;
+    pthread_mutex_t seek_mutex;
 public:
     WlFFmpeg(WlPlaystatus *playstatus, WlCallJava *callJava, const char *url);
     ~WlFFmpeg();
@@ -36,6 +38,21 @@ public:
     void decodeFFmpegThread();
     void start();
 
+    void pause();
+
+    void resume();
+
+    void release();
+
+    void seek(int64_t secds);
+
+    void setVolume(int percent);
+
+    void setMute(int mute);
+
+    void setPitch(float pitch);
+
+    void setSpeed(float speed);
 };
 
 

@@ -6,6 +6,8 @@
 cmake_minimum_required(VERSION 3.18.1)
 
 include_directories(src/main/cpp/include)
+include_directories(src/main/cpp/soundtouch/include)
+include_directories(src/main/cpp/soundtouch/SoundTouch)
 
 #-------------111 添加动态库--------------------------------------------------------------------------
 add_library( avcodec SHARED IMPORTED)
@@ -62,8 +64,23 @@ add_library( # Sets the name of the library.
         src/main/cpp/WlAudio.cpp
         src/main/cpp/WlCallJava.cpp
         src/main/cpp/WlFFmpeg.cpp
-	src/main/cpp/WlQueue.cpp
-	src/main/cpp/WlPlaystatus.cpp)
+	    src/main/cpp/WlQueue.cpp
+	    src/main/cpp/WlPlaystatus.cpp
+
+		src/main/cpp/soundtouch/SoundTouch/AAFilter.cpp
+		src/main/cpp/soundtouch/SoundTouch/FIFOSampleBuffer.cpp
+		src/main/cpp/soundtouch/SoundTouch/FIRFilter.cpp
+		src/main/cpp/soundtouch/SoundTouch/cpu_detect_x86.cpp
+		src/main/cpp/soundtouch/SoundTouch/sse_optimized.cpp
+		src/main/cpp/soundtouch/SoundTouch/RateTransposer.cpp
+		src/main/cpp/soundtouch/SoundTouch/SoundTouch.cpp
+		src/main/cpp/soundtouch/SoundTouch/InterpolateCubic.cpp
+		src/main/cpp/soundtouch/SoundTouch/InterpolateLinear.cpp
+		src/main/cpp/soundtouch/SoundTouch/InterpolateShannon.cpp
+		src/main/cpp/soundtouch/SoundTouch/TDStretch.cpp
+		src/main/cpp/soundtouch/SoundTouch/PeakFinder.cpp
+
+		)
 
 find_library( # Sets the name of the path variable.
         log-lib
@@ -82,4 +99,5 @@ target_link_libraries( # Specifies the target library.
         swresample
         swscale
 
+        OpenSLES
         ${log-lib})

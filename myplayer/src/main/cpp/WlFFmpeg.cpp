@@ -2,12 +2,16 @@
 // Created by yangw on 2018-2-28.
 //
 
+
 #include "WlFFmpeg.h"
 
 WlFFmpeg::WlFFmpeg(WlPlaystatus *playstatus, WlCallJava *callJava, const char *url) {
     this->playstatus = playstatus;
     this->callJava = callJava;
     this->url = url;
+    exit = false;
+    pthread_mutex_init(&init_mutex, NULL);
+    pthread_mutex_init(&seek_mutex, NULL);
 }
 
 void *decodeFFmpeg(void *data)
@@ -23,17 +27,36 @@ void WlFFmpeg::parpared() {
 
 }
 
+int avformat_callback(void *ctx)
+{
+    WlFFmpeg *fFmpeg = (WlFFmpeg *) ctx;
+    if(fFmpeg->playstatus->exit)
+    {
+        return AVERROR_EOF;
+    }
+    return 0;
+}
+
+
 void WlFFmpeg::decodeFFmpegThread() {
 
+    pthread_mutex_lock(&init_mutex);
     av_register_all();
     avformat_network_init();
     pFormatCtx = avformat_alloc_context();
+
+    pFormatCtx->interrupt_callback.callback = avformat_callback;
+    pFormatCtx->interrupt_callback.opaque = this;
+
     if(avformat_open_input(&pFormatCtx, url, NULL, NULL) != 0)
     {
         if(LOG_DEBUG)
         {
             LOGE("can not open url :%s", url);
         }
+        callJava->onCallError(CHILD_THREAD, 1001, "can not open url");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
         return;
     }
     if(avformat_find_stream_info(pFormatCtx, NULL) < 0)
@@ -42,6 +65,9 @@ void WlFFmpeg::decodeFFmpegThread() {
         {
             LOGE("can not find streams from %s", url);
         }
+        callJava->onCallError(CHILD_THREAD, 1002, "can not find streams from url");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
         return;
     }
     for(int i = 0; i < pFormatCtx->nb_streams; i++)
@@ -50,9 +76,12 @@ void WlFFmpeg::decodeFFmpegThread() {
         {
             if(audio == NULL)
             {
-                audio = new WlAudio(playstatus);
+                audio = new WlAudio(playstatus, pFormatCtx->streams[i]->codecpar->sample_rate, callJava);
                 audio->streamIndex = i;
                 audio->codecpar = pFormatCtx->streams[i]->codecpar;
+                audio->duration = pFormatCtx->duration / AV_TIME_BASE;
+                audio->time_base = pFormatCtx->streams[i]->time_base;
+                duration = audio->duration;
             }
         }
     }
@@ -64,6 +93,9 @@ void WlFFmpeg::decodeFFmpegThread() {
         {
             LOGE("can not find decoder");
         }
+        callJava->onCallError(CHILD_THREAD, 1003, "can not find decoder");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
         return;
     }
 
@@ -74,6 +106,9 @@ void WlFFmpeg::decodeFFmpegThread() {
         {
             LOGE("can not alloc new decodecctx");
         }
+        callJava->onCallError(CHILD_THREAD, 1004, "can not alloc new decodecctx");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
         return;
     }
 
@@ -83,6 +118,9 @@ void WlFFmpeg::decodeFFmpegThread() {
         {
             LOGE("can not fill decodecctx");
         }
+        callJava->onCallError(CHILD_THREAD, 1005, "ccan not fill decodecctx");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
         return;
     }
 
@@ -92,64 +130,209 @@ void WlFFmpeg::decodeFFmpegThread() {
         {
             LOGE("cant not open audio strames");
         }
+        callJava->onCallError(CHILD_THREAD, 1006, "cant not open audio strames");
+        exit = true;
+        pthread_mutex_unlock(&init_mutex);
         return;
     }
-    callJava->onCallParpared(CHILD_THREAD);
+    if(callJava != NULL)
+    {
+        if(playstatus != NULL && !playstatus->exit)
+        {
+            callJava->onCallParpared(CHILD_THREAD);
+        } else{
+            exit = true;
+        }
+    }
+    pthread_mutex_unlock(&init_mutex);
 }
 
 void WlFFmpeg::start() {
 
     if(audio == NULL)
     {
-        if(LOG_DEBUG)
-        {
-            LOGE("audio is null");
-            return;
-        }
+        return;
     }
-
-    int count = 0;
-
-    while(1)
+    audio->play();
+    while(playstatus != NULL && !playstatus->exit)
     {
+        if(playstatus->seek)
+        {
+            continue;
+        }
+
+        if(audio->queue->getQueueSize() > 40)
+        {
+            continue;
+        }
         AVPacket *avPacket = av_packet_alloc();
         if(av_read_frame(pFormatCtx, avPacket) == 0)
         {
             if(avPacket->stream_index == audio->streamIndex)
             {
-                //解码操作
-                count++;
-                if(LOG_DEBUG)
-                {
-                    LOGE("解码第 %d 帧", count);
-                }
                 audio->queue->putAvpacket(avPacket);
-
             } else{
                 av_packet_free(&avPacket);
                 av_free(avPacket);
             }
         } else{
-            if(LOG_DEBUG)
-            {
-                LOGE("decode finished");
-            }
             av_packet_free(&avPacket);
             av_free(avPacket);
+            while(playstatus != NULL && !playstatus->exit)
+            {
+                if(audio->queue->getQueueSize() > 0)
+                {
+                    continue;
+                } else{
+                    playstatus->exit = true;
+                    break;
+                }
+            }
             break;
         }
     }
-
-    while (audio->queue->getQueueSize() > 0)
+    if(callJava != NULL)
     {
-        AVPacket *packet = av_packet_alloc();
-        audio->queue->getAvpacket(packet);
-        av_packet_free(&packet);
-        av_free(packet);
-        packet = NULL;
+        callJava->onCallComplete(CHILD_THREAD);
+    }
+    exit = true;
+
+}
+
+void WlFFmpeg::pause() {
+    if(audio != NULL)
+    {
+        audio->pause();
+    }
+}
+
+void WlFFmpeg::resume() {
+    if(audio != NULL)
+    {
+        audio->resume();
+    }
+}
+
+void WlFFmpeg::release() {
+
+    if(LOG_DEBUG)
+    {
+        LOGE("开始释放Ffmpe");
+    }
+    playstatus->exit = true;
+    pthread_mutex_lock(&init_mutex);
+    int sleepCount = 0;
+    while (!exit)
+    {
+        if(sleepCount > 1000)
+        {
+            exit = true;
+        }
+        if(LOG_DEBUG)
+        {
+            LOGE("wait ffmpeg  exit %d", sleepCount);
+        }
+        sleepCount++;
+        av_usleep(1000 * 10);//暂停10毫秒
+    }
+
+    if(LOG_DEBUG)
+    {
+        LOGE("释放 Audio");
+    }
+
+    if(audio != NULL)
+    {
+        audio->release();
+        delete(audio);
+        audio = NULL;
+    }
+
+    if(LOG_DEBUG)
+    {
+        LOGE("释放 封装格式上下文");
+    }
+    if(pFormatCtx != NULL)
+    {
+        avformat_close_input(&pFormatCtx);
+        avformat_free_context(pFormatCtx);
+        pFormatCtx = NULL;
     }
     if(LOG_DEBUG)
     {
-        LOGD("解码完成");
+        LOGE("释放 callJava");
     }
+    if(callJava != NULL)
+    {
+        callJava = NULL;
+    }
+    if(LOG_DEBUG)
+    {
+        LOGE("释放 playstatus");
+    }
+    if(playstatus != NULL)
+    {
+        playstatus = NULL;
+    }
+    pthread_mutex_unlock(&init_mutex);
+}
+
+WlFFmpeg::~WlFFmpeg() {
+    pthread_mutex_destroy(&init_mutex);
+    pthread_mutex_destroy(&seek_mutex);
+}
+
+void WlFFmpeg::seek(int64_t secds) {
+
+    if(duration <= 0)
+    {
+        return;
+    }
+    if(secds >= 0 && secds <= duration)
+    {
+        if(audio != NULL)
+        {
+            playstatus->seek = true;
+            audio->queue->clearAvpacket();
+            audio->clock = 0;
+            audio->last_tiem = 0;
+            pthread_mutex_lock(&seek_mutex);
+            int64_t rel = secds * AV_TIME_BASE;
+            avformat_seek_file(pFormatCtx, -1, INT64_MIN, rel, INT64_MAX, 0);
+            pthread_mutex_unlock(&seek_mutex);
+            playstatus->seek = false;
+        }
+    }
+}
+
+void WlFFmpeg::setVolume(int percent) {
+    if(audio != NULL)
+    {
+        audio->setVolume(percent);
+    }
+}
+
+void WlFFmpeg::setMute(int mute) {
+    if(audio != NULL)
+    {
+        audio->setMute(mute);
+    }
+}
+
+void WlFFmpeg::setPitch(float pitch) {
+
+    if(audio != NULL)
+    {
+        audio->setPitch(pitch);
+    }
+
+}
+
+void WlFFmpeg::setSpeed(float speed) {
+
+    if(audio != NULL)
+    {
+        audio->setSpeed(speed);
+    }
+
 }
